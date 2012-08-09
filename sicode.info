@@ -1,0 +1,11 @@
+name = Signup Code
+description = Add Registration codes feature in SignUp.
+package = Signup
+dependencies[] = signup
+dependencies[] = regcode
+dependencies[] = views
+dependencies[] = views_bulk_operations
+core = 6.x
+
+; Information added by albert on 2012-08-07
+version = "6.x-1.0"

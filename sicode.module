@@ -1,0 +1,440 @@
+<?php
+
+/**
+ * @file sicode.module
+ */
+
+/**
+ * Implementation of hook_perm().
+ */
+function sicode_perm() {
+  return array('administer signup code');
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function sicode_menu() {
+  $items = array();
+
+  $items['admin/user/sicode'] = array(
+    'title' => 'Signup code settings',
+    'description' => 'Helper functions, pages, and blocks to assist Drupal developers.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('sicode_admin_settings'),
+    'access arguments' => array('administer signup code'),
+  );
+
+  return $items;
+}
+
+/**
+ * Settings page form
+ */
+function sicode_admin_settings() {
+  $form = array();
+
+  // sicode
+  $form['sicode'] = array(
+    '#type' => 'fieldset', 
+    '#title' => t('Signup code'), 
+    '#weight' => 0, 
+    '#collapsible' => TRUE, 
+    '#collapsed' => FALSE,
+  );
+  $form['sicode']['sicode_disable_regcode'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Disable Registration codes features.'),
+    '#default_value' => variable_get('sicode_disable_regcode', 0),
+    '#description'   => t('If checked, Registration codes will not appear in user registration pages.'),
+  );
+
+  // sicode owner
+  $form['sicode_owner'] = array(
+    '#type' => 'fieldset', 
+    '#title' => t('Signup code owner'), 
+    '#weight' => 0, 
+    '#collapsible' => TRUE, 
+    '#collapsed' => FALSE,
+  );
+  $form['sicode_owner']['sicode_owner_enable'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Enable Signup code owner feature.'),
+    '#default_value' => variable_get('sicode_owner_enable', 0),
+    '#description'   => t('If checked then you can choose follow role to use owner feature.'),
+  );
+
+  $roles = array(0 => t('- Please choose -')) + user_roles();
+  // unset default roles
+  unset($roles[1]);
+  unset($roles[2]);
+  $form['sicode_owner']['sicode_owner_role'] = array(
+    '#type' => 'select', 
+    '#title' => t('Choose Signup code owner role'), 
+    '#default_value' => variable_get('sicode_owner_role', 0),
+    '#options' => $roles,
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Get sicode owners of specific role.
+ */
+function _sicode_get_owners() {
+  if (!variable_get('sicode_owner_enable', 0)) {
+    return;
+  }
+  $q = db_query("SELECT ur.uid, u.name FROM {users_roles} ur LEFT JOIN {users} u ON ur.uid = u.uid WHERE rid = %d", variable_get('sicode_owner_role', 0));
+  while ($row = db_fetch_array($q)) {
+    $return[$row['uid']] = $row['name'];
+  }
+  return $return;
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ * Add sicode owner form.
+ */
+function sicode_form_regcode_admin_create_alter(&$form, &$form_state) {
+  // sicode owner
+  if (!variable_get('sicode_owner_enable', 0)) {
+    return;
+  }
+  $has_owner = count(_sicode_get_owners());
+  $discription = !$has_owner ? t('Please <a href="@sicode">choose role</a> first, than you can choose owner.', array('@sicode' => url('admin/user/sicode'))) : NULL;
+  $form['sicode_owner'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Signup code owner'),
+    '#description'   => $discription,
+    '#weight' => 0,
+    '#collapsible' => TRUE, 
+    '#collapsed' => FALSE,
+  );
+  if ($has_owner) {
+    $owners = array(0 => t('- Please choose -')) + _sicode_get_owners();
+
+    $form['sicode_owner']['sicode_owner_create'] = array(
+      '#type' => 'select',
+      '#title' => t('Signup code owner'),
+      '#description'   => t('Choose your signup code owner.'),
+      '#options' => $owners,
+    );
+  }
+  $form['#submit'] = array('sicode_admin_create_submit');
+}
+
+/**
+ * log sicode owner.
+ * @see sicode_form_regcode_admin_create_alter().
+ */
+function sicode_admin_create_submit($form, &$form_state) {
+  $code = new stdClass;
+
+  // Convert dates into timestamps
+  foreach (array('begins', 'expires') as $field) {
+    $value = $form_state['values']['regcode_create_' . $field];
+    $code->$field = NULL;
+    if ($value['year'] != 0) {
+      $code->$field = mktime(0,0,0, $value['month'], $value['day'], $value['year']);
+    }
+  }
+
+  // Grab form values
+  $code->is_active = 1;
+  $code->maxuses   = $form_state['values']['regcode_create_maxuses'];
+  $terms           = $form_state['values']['regcode_create_tags'];
+
+  // Start creating codes
+  for ($i = 0; $i < (int) $form_state['values']['regcode_create_number']; $i++) {
+    $code->code = $form_state['values']['regcode_create_code'];
+
+    // Generate a code
+    if (empty($code->code) || $form_state['values']['regcode_create_number'] > 1) {
+      $gen = regcode_generate($form_state['values']['regcode_create_length'],
+        $form_state['values']['regcode_create_format'],
+        $form_state['values']['regcode_create_case']);
+      $code->code .= $gen;
+    }
+
+    // Save code
+    if (regcode_save($code, $terms, REGCODE_MODE_SKIP)) {
+      // sicode owner log
+      $sicode_owner = new stdClass;
+      $sicode_owner->code = $code->code;
+      $sicode_owner->uid = $form['sicode_owner']['sicode_owner_create']['#value'];
+      sicode_owner_save($sicode_owner);
+
+      drupal_set_message(t('Created registration code (%code)', array('%code' => $code->code)));
+    }
+    else {
+      drupal_set_message(t('Unable to create code (%code) as code already exists', array('%code' => $code->code)), 'warning');
+    }
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ * In the settings page, check to disable recode in
+ * user registration page.
+ */
+function sicode_form_user_register_alter(&$form, &$form_state) {
+  if (variable_get('sicode_disable_regcode', 0)) {
+    unset($form['regcode']);
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ * Add recode to signup form.
+ */
+function sicode_form_signup_form_alter(&$form, &$form_state) {
+  $form['collapse']['signup_user_form']['regcode_code'] = array(
+    '#type'        => 'textfield',
+    '#title'       => t('Signup Code'),
+    '#description' => t('Please enter your Signup code.'),
+    '#required'    => TRUE,
+  );
+
+  // Capture the code from the url and inject it into the registration form
+  if (isset($_GET['regcode'])) {
+    $form['collapse']['signup_user_form']['regcode_code']['#value']       = check_plain($_GET['regcode']);
+    $form['collapse']['signup_user_form']['regcode_code']['#description'] = NULL;
+    $form['collapse']['signup_user_form']['regcode_code']['#disabled']    = TRUE;
+  }
+
+  $form['#validate'][] = 'sicode_form_validate';
+  $form['#submit'][] = 'sicode_form_submit';
+}
+
+/**
+ * Check signup form's regcode is valid value.
+ * @see sicode_form_signup_form_alter().
+ */
+function sicode_form_validate(&$form, &$form_state) {
+  global $user;
+
+  $edit['regcode_code'] = $form['collapse']['signup_user_form']['regcode_code']['#value'];
+  module_invoke_all('regcode_validate', $edit, $user);
+  $code = regcode_use($edit['regcode_code']);
+  if (!is_object($code)) {
+    form_set_error('regcode_code', regcode_errormsg($code));
+    watchdog('regcode', 'User entered invalid registration code (@code)',
+      array('@code' => $edit['regcode_code']),
+      WATCHDOG_WARNING);
+  }
+  else {
+    regcode_use_helper($edit, $user);
+  }
+}
+
+/**
+ * Saving sicode record.
+ * @see sicode_form_signup_form_alter().
+ */
+function sicode_form_submit(&$form, &$form_state) {
+  global $user;
+  regcode_use_helper($edit, $user);
+  $sicode = new stdClass;
+  $sicode->sid = sicode_get_sid($user->uid, $form['nid']['#value']);
+  $sicode->code = $form['collapse']['signup_user_form']['regcode_code']['#value'];
+
+  sicode_save($sicode);
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ * Signup cancel confirm form.
+ */
+function sicode_form_signup_cancel_link_confirm_form_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'sicode_edit_form_submit';
+}
+
+/**
+ * When signup is canceling, than trigger this function.
+ * @see sicode_form_signup_cancel_link_confirm_form_alter().
+ */
+function sicode_edit_form_submit(&$form, &$form_state) {
+  $code = sicode_get_code($form['sid']['#value']);
+  $q = db_query("SELECT r.uses, r.maxuses, r.begins, r.expires, r.is_active FROM {regcode} r WHERE code = '%s'", $code);
+  $regcode = db_fetch_object($q);
+
+  $is_active = $regcode->is_active;
+  $overtime = FALSE;
+  if (!empty($regcode->begins) && $regcode->begins > time()) {
+    $overtime = TRUE;
+  }
+  if (!empty($regcode->expires) && $regcode->expires < time()) {
+    $overtime = TRUE;
+  }
+
+  // if regcode uses equal max uses and not overtime, than active regcode.
+  if ($regcode->maxuses != 0 && $regcode->uses == $regcode->maxuses && !$overtime) {
+    $is_active = 1;
+  }
+
+  $sql = "UPDATE {regcode} SET uses = uses - 1, is_active = %d WHERE code = '%s'";
+  db_query(
+    $sql,
+    $is_active,
+    $code
+  );
+
+  sicode_remove($form['sid']['#value']);
+}
+
+/**
+ * Code saving.
+ */
+function sicode_save($sicode) {
+  $sql = "INSERT INTO {sicode} (sid, code) VALUES (%d, '%s')";
+  db_query(
+    $sql,
+    $sicode->sid,
+    $sicode->code
+  );
+}
+
+/**
+ * Owner saving.
+ */
+function sicode_owner_save($sicode_owner) {
+  $sql = "INSERT INTO {sicode_owner} (code, uid) VALUES ('%s', %d)";
+  db_query(
+    $sql,
+    $sicode_owner->code,
+    $sicode_owner->uid
+  );
+}
+
+/**
+ * Code removing.
+ */
+function sicode_remove($sid) {
+  db_query("DELETE FROM {sicode} WHERE sid = %d", $sid);
+}
+
+/**
+ * Owner removing.
+ */
+function sicode_owner_remove($code) {
+  db_query("DELETE FROM {sicode} WHERE code = '%s'", $code);
+}
+
+/**
+ * Get signup's id.
+ */
+function sicode_get_sid($uid, $nid) {
+  $q = db_query("SELECT sl.sid FROM {signup_log} sl WHERE sl.uid = %d AND sl.nid = %d", $uid, $nid);
+  return db_fetch_object($q)->sid;
+}
+
+/**
+ * Get sicode's code.
+ */
+function sicode_get_code($sid) {
+  $q = db_query("SELECT sc.code FROM {sicode} sc WHERE sc.sid = %d", $sid);
+  return db_fetch_object($q)->code;
+}
+
+/**
+ * Implementation of hook_views_api().
+ */
+function sicode_views_api() {
+  return array(
+    'api' => 2.0,
+    'path' => drupal_get_path('module', 'sicode') .'/views',
+  );
+}
+
+/**
+ * Implementation of hook_action_info().
+ */
+function sicode_action_info() {
+  return array(
+    'sicode_owner_action' => array(
+      'type'         => 'regcode',
+      'description'  => t('Management signup codes owner'),
+      'configurable' => TRUE,
+      'hooks'        => array('any' => TRUE),
+    ),
+    'sicode_delete_action' => array(
+      'type'         => 'regcode',
+      'description'  => t('Delete Signup codes'),
+      'configurable' => FALSE,
+      'hooks'        => array('any' => TRUE),
+    ),
+  );
+}
+
+/**
+ * @see sicode_owner_action().
+ */
+function sicode_owner_action_form() {
+  $form = array();
+
+  $has_owner = count(_sicode_get_owners());
+  $owners = $has_owner ? array(0 => t('- none -')) + _sicode_get_owners() : NULL;
+  $discription = $has_owner ?
+                 t('Select owner to be assigned to the selected codes.') :
+                 t('Please <a href="@sicode">choose role</a> first, than you can choose owner.', array('@sicode' => url('admin/user/sicode')));
+
+  $form['sicode_assigned_owner'] = array(
+    '#type'          => 'radios',
+    '#title'         => t('Assigned owner'),
+    '#default_value' => 0,
+    '#description'   => $discription,
+    '#options'       => $owners,
+  );
+
+  $form['sicode_remove_owner'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Remove owner'),
+  );
+
+  return $form;
+}
+
+/**
+ * @see sicode_owner_action_form().
+ */
+function sicode_owner_action_submit($form, $form_state) {
+  return array(
+    'assigned_owner' => $form_state['values']['sicode_assigned_owner'],
+    'remove_owner'   => $form_state['values']['sicode_remove_owner']
+  );
+}
+
+/**
+ * Implementation of a Drupal action
+ * @see sicode_action_info().
+ * @param object $object
+ *   this object is from regcode.module function regcode_load().
+ *   also see regcode_views_bulk_operations_object_info().
+ * @param array $context
+ *   this $context is use to pass param from a array $form.
+ */
+function sicode_owner_action(&$object, $context = array()) {
+  // Assigned owner
+  if ($context['assigned_owner']) {
+    db_query("UPDATE {sicode_owner} SET uid = %d WHERE code = '%s'",
+      $context['assigned_owner'],
+      $object->code
+    ); 
+  }
+  // Remove owner
+  if ($context['remove_owner']) {
+    db_query("UPDATE {sicode_owner} SET uid = 0 WHERE code = '%s'",
+      $object->code
+    );  
+  }
+}
+
+/**
+ * Implementation of a Drupal action
+ * @see sicode_action_info().
+ */
+function sicode_delete_action(&$object, $context = array()) {
+  db_query("DELETE FROM {regcode} WHERE rid = %d", $object->rid);
+  db_query("DELETE FROM {sicode_owner} WHERE code = '%s'", $object->code);
+}

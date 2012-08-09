@@ -1,0 +1,83 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function sicode_schema() {
+  $schema['sicode'] = array(
+    'description' => t('Records information for each user who signs up for a node.'),
+    'fields' => array(
+      'id' => array(
+        'description' => t('Primary key: sicode ID'),
+        'type' => 'serial',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'sid' => array(
+        'description' => t('signup ID'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'code' => array(
+        'description' => t('The signup code'),
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'sid' => array('sid')
+    ),
+  );
+
+  $schema['sicode_owner'] = array(
+    'description' => t('Records information for each user who signs up for a node.'),
+    'fields' => array(
+      'code' => array(
+        'description' => t('The signup code'),
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'uid' => array(
+        'description' => t('Regcode Owner.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('code'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function sicode_install() {
+  // set default variables
+  variable_set('sicode_disable_regcode', 0);
+  variable_set('sicode_owner_enable', 0);
+  variable_set('sicode_owner_role', 0);
+  drupal_install_schema('sicode');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function sicode_uninstall() {
+  drupal_uninstall_schema('sicode');
+
+  $variables = db_query("SELECT name FROM {variable} WHERE name LIKE 'sicode_%'");
+  while ($variable = db_fetch_object($variables)) {
+    variable_del($variable->name);
+  }
+}
