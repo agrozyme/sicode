@@ -1,9 +1,9 @@
 # Signup Code
 
-This project is used in Drupal's module and based on [Signup][1] and
-[Registration codes][2] modules.
+This project is used in Drupal's module and based on [Signup] and
+[Registration codes] modules.
 
-## Summary
+## Overview
 
 This project integrate **Signup** and **Registration codes** and provide
 Registration codes into Signup form. The management UI is use same as
@@ -22,10 +22,10 @@ Here is feature list of this module:
 
 ## Requirements and Dependencies
 
-* [signup][1]
-* [Registration code][2]
-* [views][3]
-* [Views Bulk Operations][4]
+* [Signup]
+* [Registration codes]
+* [Views]
+* [Views Bulk Operations]
 
 ## Installation and Settings
 
@@ -54,7 +54,7 @@ following steps:
 
 ## License
 
-Copyright (c) 2012 [Albert Liu][5]
+Copyright (c) 2012 [Albert Liu]
 
 Licensed under the [GNU GENERAL PUBLIC LICENSE Version 2][5], you may not use
 this file except in compliance with the License.
@@ -66,17 +66,18 @@ specific language governing permissions and limitations under the License.
 
 ## Author
 
-[Albert Liu][6]
+[Albert Liu]
 
 If you use this module, find it useful, and want to send the author
-a thank or you note, feel free to contact me (service.albert@gmail.com).
+a thank or you note, feel free to [contact me].
 
 The author can also be contacted for paid customizations of this and other
 modules.
 
-[1]: http://drupal.org/project/signup
-[2]: http://drupal.org/project/regcode
-[3]: http://drupal.org/project/views
-[4]: http://drupal.org/project/views_bulk_operations
-[5]: http://www.gnu.org/licenses/gpl-2.0.html
-[6]: http://drupal.org/user/1374916
+[Signup]: http://drupal.org/project/signup
+[Registration codes]: http://drupal.org/project/regcode
+[Views]: http://drupal.org/project/views
+[Views Bulk Operations]: http://drupal.org/project/views_bulk_operations
+[GNU GENERAL PUBLIC LICENSE Version 2]: http://www.gnu.org/licenses/gpl-2.0.html
+[Albert Liu]: http://drupal.org/user/1374916
+[contact me]: service.albert@gmail.com
