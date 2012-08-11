@@ -34,23 +34,24 @@ TO successful completion of this installation.
 First, you must to install above "Dependencies" module, and according to the
 following steps:
 
-1. Take the `sicode` folder to the modules folder in your installation.
+1. Decompress and rename the folder to **sicode**
 
-2. Enable the module using Administer -> Site building -> Modules.
-   `admin/build/modules`
+2. Place **sicode** folder into the **modules** in your installation
 
-3. Settinga and configure this module. `admin/user/sicode`
+3. Enable this module *(admin/build/modules)*
 
-4. Configure Views (Use in Signup code owner):
-   a. Edit regcode views `admin/build/views/edit/regcode#views-tab-page_admin`
-   b. To add Sign code owner features, add Relationships
-      `Signup Code Owner: user`
-   c. Add `user name` fields and choose `Sicode owner` relationships
+4. Setting and configure this module *(admin/user/sicode)*
 
-5. Configure Views Bulk Operations:
-   a. Click `Style` configure button
-   b. Add what you want operations
-   b. Use `Delete Signup codes` instead of `Delete codes`
+5. Configure Views (For **Signup code owner**):
+   * Edit regcode views *(admin/build/views/edit/regcode#views-tab-page_admin)*
+   * To add Sign code owner features, add Relationships
+     `Signup Code Owner: user`
+   * Add `User: name` fields and choose `Sicode owner` relationships
+
+6. Configure Views Bulk Operations:
+   * Click **Style** configure button
+   * Add what you want operations
+   * Use `Delete Signup codes` instead of `Delete codes`
 
 ## License
 
