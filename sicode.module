@@ -36,10 +36,10 @@ function sicode_admin_settings() {
 
   // sicode
   $form['sicode'] = array(
-    '#type' => 'fieldset', 
-    '#title' => t('Signup code'), 
-    '#weight' => 0, 
-    '#collapsible' => TRUE, 
+    '#type' => 'fieldset',
+    '#title' => t('Signup code'),
+    '#weight' => 0,
+    '#collapsible' => TRUE,
     '#collapsed' => FALSE,
   );
   $form['sicode']['sicode_disable_regcode'] = array(
@@ -51,10 +51,10 @@ function sicode_admin_settings() {
 
   // sicode owner
   $form['sicode_owner'] = array(
-    '#type' => 'fieldset', 
-    '#title' => t('Signup code owner'), 
-    '#weight' => 0, 
-    '#collapsible' => TRUE, 
+    '#type' => 'fieldset',
+    '#title' => t('Signup code owner'),
+    '#weight' => 0,
+    '#collapsible' => TRUE,
     '#collapsed' => FALSE,
   );
   $form['sicode_owner']['sicode_owner_enable'] = array(
@@ -64,13 +64,12 @@ function sicode_admin_settings() {
     '#description'   => t('If checked then you can choose follow role to use owner feature.'),
   );
 
-  $roles = array(0 => t('- Please choose -')) + user_roles();
-  // unset default roles
-  unset($roles[1]);
-  unset($roles[2]);
+  $roles = array(0 => t('- Please choose -')) + user_roles(TRUE);
+  unset($roles[DRUPAL_AUTHENTICATED_RID]);
+
   $form['sicode_owner']['sicode_owner_role'] = array(
-    '#type' => 'select', 
-    '#title' => t('Choose Signup code owner role'), 
+    '#type' => 'select',
+    '#title' => t('Choose Signup code owner role'),
     '#default_value' => variable_get('sicode_owner_role', 0),
     '#options' => $roles,
   );
@@ -108,7 +107,7 @@ function sicode_form_regcode_admin_create_alter(&$form, &$form_state) {
     '#title' => t('Signup code owner'),
     '#description'   => $discription,
     '#weight' => 0,
-    '#collapsible' => TRUE, 
+    '#collapsible' => TRUE,
     '#collapsed' => FALSE,
   );
   if ($has_owner) {
@@ -420,13 +419,13 @@ function sicode_owner_action(&$object, $context = array()) {
     db_query("UPDATE {sicode_owner} SET uid = %d WHERE code = '%s'",
       $context['assigned_owner'],
       $object->code
-    ); 
+    );
   }
   // Remove owner
   if ($context['remove_owner']) {
     db_query("UPDATE {sicode_owner} SET uid = 0 WHERE code = '%s'",
       $object->code
-    );  
+    );
   }
 }
 
