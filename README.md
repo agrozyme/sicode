@@ -56,7 +56,7 @@ following steps:
 
 Copyright (c) 2012 [Albert Liu]
 
-Licensed under the [GNU GENERAL PUBLIC LICENSE Version 2][5], you may not use
+Licensed under the [GNU GENERAL PUBLIC LICENSE Version 2], you may not use
 this file except in compliance with the License.
 
 Unless required by applicable law or agreed to in writing, software distributed
@@ -69,7 +69,7 @@ specific language governing permissions and limitations under the License.
 [Albert Liu]
 
 If you use this module, find it useful, and want to send the author
-a thank or you note, feel free to [contact me].
+a thank or you note, feel free to contact me (service.albert@gmail.com).
 
 The author can also be contacted for paid customizations of this and other
 modules.
@@ -80,4 +80,3 @@ modules.
 [Views Bulk Operations]: http://drupal.org/project/views_bulk_operations
 [GNU GENERAL PUBLIC LICENSE Version 2]: http://www.gnu.org/licenses/gpl-2.0.html
 [Albert Liu]: http://drupal.org/user/1374916
-[contact me]: service.albert@gmail.com
