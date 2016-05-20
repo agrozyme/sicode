@@ -84,9 +84,13 @@ function _sicode_get_owners() {
   if (!variable_get('sicode_owner_enable', 0)) {
     return;
   }
-  $q = db_query("SELECT ur.uid, u.name FROM {users_roles} ur LEFT JOIN {users} u ON ur.uid = u.uid WHERE rid = %d", variable_get('sicode_owner_role', 0));
+  $q = db_query("SELECT u.uid FROM {users_roles} ur
+    LEFT JOIN {users} u ON ur.uid = u.uid WHERE ur.rid = %d", variable_get('sicode_owner_role', 0));
+
   while ($row = db_fetch_array($q)) {
-    $return[$row['uid']] = $row['name'];
+    $name = sicode_get_profile_name($row['uid']);
+    //$return[$row['uid']] = "[{$row['uid']}] - " . $name;
+    $return[$row['uid']] = $name;
   }
   return $return;
 }
@@ -107,7 +111,7 @@ function sicode_form_regcode_admin_create_alter(&$form, &$form_state) {
     '#title' => t('Signup code owner'),
     '#description'   => $discription,
     '#weight' => 0,
-    '#collapsible' => TRUE,
+    '#collapsible' => FALSE,
     '#collapsed' => FALSE,
   );
   if ($has_owner) {
@@ -115,11 +119,21 @@ function sicode_form_regcode_admin_create_alter(&$form, &$form_state) {
 
     $form['sicode_owner']['sicode_owner_create'] = array(
       '#type' => 'select',
-      '#title' => t('Signup code owner'),
+      '#title' => t('Assigning Signup code owner'),
       '#description'   => t('Choose your signup code owner.'),
+      '#default_value' => variable_get('sicode_owner_remember', 0),
+      '#size' => 15,
       '#options' => $owners,
     );
   }
+  // function of remenber
+  $form['regcode_create_bulk']['regcode_create_number']['#default_value'] = variable_get('regcode_create_number', 1);
+  $form['regcode_create_bulk']['regcode_create_length']['#default_value'] = variable_get('regcode_create_length', 10);
+  $form['regcode_create_bulk']['regcode_create_format']['#default_value'] = variable_get('regcode_create_format', 'alpha');
+  $form['regcode_create_bulk']['regcode_create_case']['#default_value'] = variable_get('regcode_create_case', 1);
+  $form['regcode_create']['regcode_create_tags']['#type'] = 'radios';
+  $form['regcode_create']['regcode_create_tags']['#title'] = t('Signup code place');
+  $form['regcode_create']['regcode_create_tags']['#default_value'] = variable_get('regcode_create_tags', 1);
   $form['#submit'] = array('sicode_admin_create_submit');
 }
 
@@ -129,6 +143,17 @@ function sicode_form_regcode_admin_create_alter(&$form, &$form_state) {
  */
 function sicode_admin_create_submit($form, &$form_state) {
   $code = new stdClass;
+  $uid = $form['sicode_owner']['sicode_owner_create']['#value'];
+  $owner = sicode_get_profile_name($uid);
+  $tag = taxonomy_get_term($form['regcode_create']['regcode_create_tags']['#value'])->name;
+
+  // function of remenber
+  variable_set('sicode_owner_remember', $uid);
+  variable_set('regcode_create_number', $form['regcode_create_bulk']['regcode_create_number']['#value']);
+  variable_set('regcode_create_length', $form['regcode_create_bulk']['regcode_create_length']['#value']);
+  variable_set('regcode_create_format', $form['regcode_create_bulk']['regcode_create_format']['#value']);
+  variable_set('regcode_create_case', $form['regcode_create_bulk']['regcode_create_case']['#value']);
+  variable_set('regcode_create_tags', $form['regcode_create']['regcode_create_tags']['#value']);
 
   // Convert dates into timestamps
   foreach (array('begins', 'expires') as $field) {
@@ -163,8 +188,12 @@ function sicode_admin_create_submit($form, &$form_state) {
       $sicode_owner->code = $code->code;
       $sicode_owner->uid = $form['sicode_owner']['sicode_owner_create']['#value'];
       sicode_owner_save($sicode_owner);
-
-      drupal_set_message(t('Created registration code (%code)', array('%code' => $code->code)));
+      if ($sicode_owner->uid) {
+        drupal_set_message(t('Created registration code (%code) for 「%owner」, %tag', array('%code' => $code->code, '%owner' => $owner, '%tag' => $tag)));
+      }
+      else {
+        drupal_set_message(t('Created registration code (%code), %tag', array('%code' => $code->code, '%tag' => $tag)));
+      }
     }
     else {
       drupal_set_message(t('Unable to create code (%code) as code already exists', array('%code' => $code->code)), 'warning');
@@ -178,10 +207,31 @@ function sicode_admin_create_submit($form, &$form_state) {
  * user registration page.
  */
 function sicode_form_user_register_alter(&$form, &$form_state) {
+  
   if (variable_get('sicode_disable_regcode', 0)) {
     unset($form['regcode']);
+    /*
+    $form['regcode']['regcode_code'] = array(
+      '#type'        => 'textfield',
+      '#title'       => t('Signup Code'),
+      '#description' => t('Please enter your Signup code.'),
+      '#required'    => TRUE,
+    );
+
+    // Capture the code from the url and inject it into the registration form
+    if (isset($_GET['regcode'])) {
+      $form['regcode']['regcode_code']['#value']       = check_plain($_GET['regcode']);
+      $form['regcode']['regcode_code']['#description'] = NULL;
+      $form['regcode']['regcode_code']['#disabled']    = TRUE;
+    }
+
+    $form['#validate'][] = 'regcode_validate';
+    $form['#submit'][] = 'sicode_form_submit';
+*/
   }
+  
 }
+
 
 /**
  * Implement hook_form_FORM_ID_alter().
@@ -235,8 +285,16 @@ function sicode_form_submit(&$form, &$form_state) {
   global $user;
   regcode_use_helper($edit, $user);
   $sicode = new stdClass;
-  $sicode->sid = sicode_get_sid($user->uid, $form['nid']['#value']);
-  $sicode->code = $form['collapse']['signup_user_form']['regcode_code']['#value'];
+  
+  if (isset($form_state['values']['signup_username'])) {
+    $account = user_load(array('name' => $form_state['values']['signup_username']));
+    $uid = $account->uid;
+  }else{
+    $uid = $user->uid;
+  }
+  //$sicode->sid = sicode_get_sid($user->uid, $form['nid']['#value']); //origin by albert, get current user id for save it, this is used for in-node signup
+  $sicode->sid = sicode_get_sid($uid, $form['nid']['#value']);
+  $sicode->code = trim($form['collapse']['signup_user_form']['regcode_code']['#value']);
 
   sicode_save($sicode);
 }
@@ -267,6 +325,7 @@ function sicode_edit_form_submit(&$form, &$form_state) {
     $overtime = TRUE;
   }
 
+  //print "code: ".$code."max: ".$regcode->maxuses." | used: ".$regcode->uses." | expired: ".$overtime." begin/expire: ".$regcode->begins."/".$regcode->expires;
   // if regcode uses equal max uses and not overtime, than active regcode.
   if ($regcode->maxuses != 0 && $regcode->uses == $regcode->maxuses && !$overtime) {
     $is_active = 1;
@@ -324,7 +383,7 @@ function sicode_owner_remove($code) {
  * Get signup's id.
  */
 function sicode_get_sid($uid, $nid) {
-  $q = db_query("SELECT sl.sid FROM {signup_log} sl WHERE sl.uid = %d AND sl.nid = %d", $uid, $nid);
+  $q = db_query("SELECT sl.sid FROM {signup_log} sl WHERE sl.uid = %d AND sl.nid = %d ORDER BY sid DESC", $uid, $nid);
   return db_fetch_object($q)->sid;
 }
 
@@ -334,6 +393,43 @@ function sicode_get_sid($uid, $nid) {
 function sicode_get_code($sid) {
   $q = db_query("SELECT sc.code FROM {sicode} sc WHERE sc.sid = %d", $sid);
   return db_fetch_object($q)->code;
+}
+
+/**
+ * Get sicode's code.
+ */
+function sicode_get_one_owner($sid) {
+  $q = db_query("SELECT so.uid, pv.value FROM {sicode} s
+    LEFT JOIN {sicode_owner} so ON s.code = so.code
+    LEFT JOIN {profile_values} pv ON pv.uid = so.uid
+    WHERE s.sid = %d AND pv.fid = 1", $sid);
+  $obj = db_fetch_object($q);
+  return l($obj->value, 'user/' . $obj->uid);
+}
+function sicode_get_one_owner_id($sid) {
+  $q = db_query("SELECT so.uid, pv.value FROM {sicode} s
+    LEFT JOIN {sicode_owner} so ON s.code = so.code
+    LEFT JOIN {profile_values} pv ON pv.uid = so.uid
+    WHERE s.sid = %d AND pv.fid = 1", $sid);
+  $obj = db_fetch_object($q);
+  return $obj->uid;
+}
+
+/**
+ * Get Profile name
+ */
+function sicode_get_profile_name($uid, $op = array()) {
+  $q = db_query("SELECT pv.value FROM {profile_values} pv WHERE pv.uid = %d AND pv.fid IN (2, 3) ORDER BY pv.fid DESC", $uid);
+  while ($row = db_fetch_array($q)) {
+    $name[] = $row['value'];
+  }
+  if ($op['link'] == TRUE) {
+    return l("{$name[0]} {$name[1]}", 'user/' . $uid);
+  }
+  if ($op['uid'] == TRUE) {
+    return "[{$uid}] - {$name[0]} {$name[1]}";
+  }
+  return "{$name[0]} {$name[1]}";
 }
 
 /**
